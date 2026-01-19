@@ -31,12 +31,12 @@ jobs:
       - name: Build image tar with Jib
         run: mvn -B jib:buildTar
 
-      # 4) SSH 키 파일 생성 (중요)
+      # 4) SSH 키 파일 생성
+      # ⚠️ 반드시 GITHUB_WORKSPACE 에 생성 (컨테이너와 공유됨)
       - name: Create SSH key
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+          echo "${{ secrets.SERVER_SSH_KEY }}" > $GITHUB_WORKSPACE/id_rsa
+          chmod 600 $GITHUB_WORKSPACE/id_rsa
 
       # 5) 생성된 myapp.tar 파일을 서버로 전송 (SCP)
       - name: Copy image tar to server
@@ -44,7 +44,7 @@ jobs:
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
-          key_path: ~/.ssh/id_rsa
+          key_path: /github/workspace/id_rsa
           source: "target/myapp.tar"
           target: "/home/ubuntu"
 
@@ -54,13 +54,15 @@ jobs:
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
-          key_path: ~/.ssh/id_rsa
+          key_path: /github/workspace/id_rsa
           script: |
             # 이미지 로드
             sudo docker load < /home/ubuntu/myapp.tar
 
-            # 기존 컨테이너 중지 및 삭제
+            # 기존 컨테이너 중지 (없으면 무시)
             sudo docker stop myapp || true
+
+            # 기존 컨테이너 삭제 (없으면 무시)
             sudo docker rm myapp || true
 
             # 새 컨테이너 실행
@@ -70,5 +72,5 @@ jobs:
               --restart unless-stopped \
               myapp
 
-            # 안 쓰는 이미지 정리
+            # 사용하지 않는 이미지 정리
             sudo docker image prune -f
